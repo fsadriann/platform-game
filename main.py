@@ -49,10 +49,130 @@ def get_block(size):
     surface.blit(image, (0, 0), rect)
     return pygame.transform.scale2x(surface)
 
+class Button:
+    def __init__(self, x, y, width, height, text, color=(100, 100, 100), text_color=(255, 255, 255)):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.text = text
+        self.color = color
+        self.text_color = text_color
+        self.hovered = False
+
+    def draw(self, window):
+        color = tuple(min(c + 50, 255) for c in self.color) if self.hovered else self.color
+        pygame.draw.rect(window, color, self.rect)
+        pygame.draw.rect(window, (255, 255, 255), self.rect, 2)
+        font = pygame.font.Font(None, 36)
+        text_surface = font.render(self.text, True, self.text_color)
+        text_rect = text_surface.get_rect(center=self.rect.center)
+        window.blit(text_surface, text_rect)
+
+    def is_clicked(self, pos):
+        return self.rect.collidepoint(pos)
+
+    def update(self, pos):
+        self.hovered = self.rect.collidepoint(pos)
+
+def show_menu(window):
+    play_button = Button(WIDTH // 2 - 100, HEIGHT // 2 - 60, 200, 60, "JUGAR")
+    quit_button = Button(WIDTH // 2 - 100, HEIGHT // 2 + 60, 200, 60, "SALIR")
+
+    menu_running = True
+    while menu_running:
+        clock = pygame.time.Clock()
+        clock.tick(FPS)
+        
+        mouse_pos = pygame.mouse.get_pos()
+        play_button.update(mouse_pos)
+        quit_button.update(mouse_pos)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return False
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if play_button.is_clicked(mouse_pos):
+                    return True
+                if quit_button.is_clicked(mouse_pos):
+                    return False
+
+        window.fill((30, 30, 30))
+        font_title = pygame.font.Font(None, 72)
+        title = font_title.render("PLATFORMER GAME", True, (255, 255, 255))
+        title_rect = title.get_rect(center=(WIDTH // 2, HEIGHT // 4))
+        window.blit(title, title_rect)
+
+        play_button.draw(window)
+        quit_button.draw(window)
+        pygame.display.update()
+
+def show_game_over_menu(window):
+    restart_button = Button(WIDTH // 2 - 100, HEIGHT // 2 - 20, 200, 60, "REINTENTAR")
+    menu_button = Button(WIDTH // 2 - 100, HEIGHT // 2 + 60, 200, 60, "MENÚ")
+
+    menu_running = True
+    while menu_running:
+        clock = pygame.time.Clock()
+        clock.tick(FPS)
+        
+        mouse_pos = pygame.mouse.get_pos()
+        restart_button.update(mouse_pos)
+        menu_button.update(mouse_pos)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if restart_button.is_clicked(mouse_pos):
+                    return "restart"
+                if menu_button.is_clicked(mouse_pos):
+                    return "menu"
+
+        window.fill((30, 30, 30))
+        font_title = pygame.font.Font(None, 72)
+        title = font_title.render("GAME OVER", True, (255, 0, 0))
+        title_rect = title.get_rect(center=(WIDTH // 2, HEIGHT // 4))
+        window.blit(title, title_rect)
+
+        restart_button.draw(window)
+        menu_button.draw(window)
+        pygame.display.update()
+
+def show_level_complete_menu(window):
+    continue_button = Button(WIDTH // 2 - 100, HEIGHT // 2 - 20, 200, 60, "SIGUIENTE")
+    menu_button = Button(WIDTH // 2 - 100, HEIGHT // 2 + 60, 200, 60, "MENÚ")
+
+    menu_running = True
+    while menu_running:
+        clock = pygame.time.Clock()
+        clock.tick(FPS)
+        
+        mouse_pos = pygame.mouse.get_pos()
+        continue_button.update(mouse_pos)
+        menu_button.update(mouse_pos)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if continue_button.is_clicked(mouse_pos):
+                    return "continue"
+                if menu_button.is_clicked(mouse_pos):
+                    return "menu"
+
+        window.fill((30, 30, 30))
+        font_title = pygame.font.Font(None, 72)
+        title = font_title.render("NIVEL COMPLETADO", True, (0, 255, 0))
+        title_rect = title.get_rect(center=(WIDTH // 2, HEIGHT // 4))
+        window.blit(title, title_rect)
+
+        continue_button.draw(window)
+        menu_button.draw(window)
+        pygame.display.update()
+
+
 class Player(pygame.sprite.Sprite):
     COLOR = (255, 0, 0)
     GRAVITY = 1
-    SPRITES = load_sprite_sheets("MainCharacters", "MaskDude", 32, 32, True)
+    SPRITES = load_sprite_sheets("MainCharacters", "VirtualGuy", 32, 32, True)
     ANIMATION_DELAY = 5
 
     def __init__(self, x, y, width, height):
@@ -67,6 +187,25 @@ class Player(pygame.sprite.Sprite):
         self.jump_count = 0
         self.hit = False
         self.hit_count = 0
+        self.dash_active = False
+        self.dash_velocity = 0
+        self.dash_count = 0
+        self.lives = 5
+        self.wall_slide = False
+
+    def make_dash(self):
+        if not self.dash_active:
+            self.dash_active = True
+            self.dash_count = 0
+            dash_direction = 1 if self.direction == "right" else -1
+            self.dash_velocity = 128 * dash_direction
+
+    def update_wall_slide(self, is_colliding_with_wall):
+        if is_colliding_with_wall and self.y_vel > 0:
+            self.wall_slide = True
+            self.y_vel = min(self.y_vel, 2)
+        else:
+            self.wall_slide = False
 
     def jump(self):
         self.y_vel = -self.GRAVITY * 8
@@ -81,8 +220,11 @@ class Player(pygame.sprite.Sprite):
         self.rect.y += dy
 
     def make_hit(self):
-        self.hit = True
-        self.hit_count = 0
+        if not self.hit:
+            self.hit = True
+            self.hit_count = 0
+            if self.lives > 0:
+                self.lives -= 1
 
     def move_left(self, vel):
         self.x_vel = -vel
@@ -98,11 +240,19 @@ class Player(pygame.sprite.Sprite):
 
     def loop(self, fps):
         self.y_vel += min(1, (self.fall_count / fps) * self.GRAVITY)
-        self.move(self.x_vel, self.y_vel)
+        
+        if self.dash_active:
+            self.dash_count += 1
+            if self.dash_count > fps // 4:
+                self.dash_active = False
+                self.dash_velocity = 0
+            self.move(self.dash_velocity / (fps // 6), 0)
+        else:
+            self.move(self.x_vel, self.y_vel)
 
         if self.hit:
             self.hit_count += 1
-        if self.hit_count > fps * 2:
+        if self.hit_count > fps:
             self.hit = False
             self.hit_count = 0
 
@@ -194,6 +344,34 @@ class Fire(Object):
         if self.animation_count // self.ANIMATION_DELAY > len(sprites):
             self.animation_count = 0
 
+class Collectible(pygame.sprite.Sprite):
+    def __init__(self, x, y, width, height):
+        super().__init__()
+        self.rect = pygame.Rect(x, y, width, height)
+        self.collected = False
+        self.name = "collectible"
+        self.width = width
+        self.height = height
+        self.image = pygame.Surface((width, height), pygame.SRCALPHA)
+        
+        try:
+            fruit_path = join("assets", "Items", "Fruits", "Strawberry.png")
+            if isfile(fruit_path):
+                loaded_image = pygame.image.load(fruit_path).convert_alpha()
+                self.image = pygame.transform.scale(loaded_image, (width, height))
+            else:
+                # Si no existe, dibujar un círculo
+                pygame.draw.circle(self.image, (255, 0, 0), (width // 2, height // 2), width // 2)
+        except Exception as e:
+            # Fallback: dibujar un círculo rojo
+            pygame.draw.circle(self.image, (255, 0, 0), (width // 2, height // 2), width // 2)
+        
+        self.mask = pygame.mask.from_surface(self.image)
+
+    def draw(self, win, offset_x):
+        if not self.collected:
+            win.blit(self.image, (self.rect.x - offset_x, self.rect.y))
+
 def get_background_image(name):
     image = pygame.image.load(join("assets", "Background", name))
     _, _, width, height = image.get_rect()
@@ -205,14 +383,33 @@ def get_background_image(name):
             tiles.append(pos)
     return tiles, image
 
-def draw(window, background, bg_image, player, objects, offset_x):
+def draw(window, background, bg_image, player, objects, offset_x, collectibles=None, current_level=1):
     for tile in background:
         window.blit(bg_image, tile)
 
     for obj in objects:
         obj.draw(window, offset_x)
 
+    # Dibujar coleccionables
+    if collectibles:
+        for collectible in collectibles:
+            collectible.draw(window, offset_x)
+
     player.draw(window, offset_x)
+    
+    # Mostrar información del juego
+    font = pygame.font.Font(None, 36)
+    lives_text = font.render(f"Vidas: {player.lives}", True, (255, 0, 0))
+    window.blit(lives_text, (10, 10))
+    
+    level_text = font.render(f"Nivel: {current_level}", True, (0, 255, 0))
+    window.blit(level_text, (10, 50))
+    
+    # Mostrar coleccionables recolectados
+    collectibles_collected = sum(1 for c in collectibles if c.collected) if collectibles else 0
+    collectibles_total = len(collectibles) if collectibles else 0
+    collectibles_text = font.render(f"Frutas: {collectibles_collected}/{collectibles_total}", True, (255, 215, 0))
+    window.blit(collectibles_text, (10, 90))
 
     pygame.display.update()
 
@@ -257,7 +454,7 @@ def handle_move(player, objects):
     vertical_collide = handle_vertical_collision(player, objects, player.y_vel)
     to_check = [collide_left, collide_right, *vertical_collide]
     for obj in to_check:
-        if obj and obj.name == "fire":
+        if obj and obj.name == "fire" and not player.hit:
             player.make_hit()
 
 def main(window):
@@ -265,14 +462,106 @@ def main(window):
     background, bg_image = get_background_image("Blue.png")
 
     block_size = 96
-
-    player = Player(100, 100, 50, 50)
-    fire = Fire(100, HEIGHT - block_size -64, 16, 32)
-    fire.on()
-    floor = [Block(i * block_size, HEIGHT - block_size, block_size) for i in range(-WIDTH // block_size, (WIDTH * 2) // block_size)]
-
-    objects = [*floor, Block(0,HEIGHT - block_size * 2, block_size), Block(block_size * 3,HEIGHT - block_size * 4, block_size), fire]
-
+    current_level = 1
+    
+    def setup_level(level_num):
+        player = Player(100, 100, 50, 50)
+        
+        floor = [Block(i * block_size, HEIGHT - block_size, block_size) for i in range(-WIDTH // block_size, (WIDTH * 2) // block_size)]
+        
+        # Rediseño del nivel con más plataformas - Nivel 1
+        if level_num == 1:
+            platforms = [
+                Block(0, HEIGHT - block_size * 2, block_size),
+                Block(block_size * 3, HEIGHT - block_size * 4, block_size),
+                Block(block_size * 6, HEIGHT - block_size * 3, block_size * 2),
+                Block(block_size * 9, HEIGHT - block_size * 5, block_size),
+                Block(block_size * 12, HEIGHT - block_size * 3, block_size * 2),
+                Block(block_size * 15, HEIGHT - block_size * 6, block_size),
+            ]
+            
+            # Fuegos posicionados sobre las plataformas
+            fires = [
+                Fire(block_size * 0.5, HEIGHT - block_size * 2.5, 16, 32),
+                Fire(block_size * 3.5, HEIGHT - block_size * 4.5, 16, 32),
+                Fire(block_size * 9.5, HEIGHT - block_size * 5.5, 16, 32),
+            ]
+            for fire in fires:
+                fire.on()
+            
+            # Coleccionables
+            collectibles = [
+                Collectible(block_size * 1.5, HEIGHT - block_size * 3 - 40, 40, 40),
+                Collectible(block_size * 5, HEIGHT - block_size * 4 - 40, 40, 40),
+                Collectible(block_size * 10, HEIGHT - block_size * 6 - 40, 40, 40),
+                Collectible(block_size * 14, HEIGHT - block_size * 4 - 40, 40, 40),
+            ]
+        
+        # Nivel 2 - Más difícil
+        elif level_num == 2:
+            platforms = [
+                Block(block_size * 1.5, HEIGHT - block_size * 3, block_size),
+                Block(block_size * 4, HEIGHT - block_size * 5, block_size),
+                Block(block_size * 7, HEIGHT - block_size * 4, block_size * 1.5),
+                Block(block_size * 10, HEIGHT - block_size * 6, block_size),
+                Block(block_size * 13, HEIGHT - block_size * 4, block_size * 1.5),
+                Block(block_size * 16, HEIGHT - block_size * 7, block_size),
+            ]
+            
+            fires = [
+                Fire(block_size * 2, HEIGHT - block_size * 3.5, 16, 32),
+                Fire(block_size * 4.5, HEIGHT - block_size * 5.5, 16, 32),
+                Fire(block_size * 10.5, HEIGHT - block_size * 6.5, 16, 32),
+                Fire(block_size * 13.5, HEIGHT - block_size * 4.5, 16, 32),
+            ]
+            for fire in fires:
+                fire.on()
+            
+            collectibles = [
+                Collectible(block_size * 2, HEIGHT - block_size * 3 - 40, 40, 40),
+                Collectible(block_size * 5, HEIGHT - block_size * 5 - 40, 40, 40),
+                Collectible(block_size * 8, HEIGHT - block_size * 4 - 40, 40, 40),
+                Collectible(block_size * 11, HEIGHT - block_size * 6 - 40, 40, 40),
+                Collectible(block_size * 15, HEIGHT - block_size * 4 - 40, 40, 40),
+            ]
+        
+        # Nivel 3 - Muy difícil
+        elif level_num == 3:
+            platforms = [
+                Block(block_size * 0.5, HEIGHT - block_size * 2, block_size * 0.8),
+                Block(block_size * 2.5, HEIGHT - block_size * 4, block_size * 0.8),
+                Block(block_size * 4.5, HEIGHT - block_size * 3, block_size * 0.8),
+                Block(block_size * 6.5, HEIGHT - block_size * 5, block_size * 0.8),
+                Block(block_size * 8.5, HEIGHT - block_size * 4, block_size),
+                Block(block_size * 11, HEIGHT - block_size * 6, block_size * 0.8),
+                Block(block_size * 13, HEIGHT - block_size * 3, block_size),
+                Block(block_size * 15.5, HEIGHT - block_size * 7, block_size * 0.8),
+            ]
+            
+            fires = [
+                Fire(block_size * 1, HEIGHT - block_size * 2.5, 16, 32),
+                Fire(block_size * 3, HEIGHT - block_size * 4.5, 16, 32),
+                Fire(block_size * 5, HEIGHT - block_size * 3.5, 16, 32),
+                Fire(block_size * 7, HEIGHT - block_size * 5.5, 16, 32),
+                Fire(block_size * 9, HEIGHT - block_size * 4.5, 16, 32),
+                Fire(block_size * 12, HEIGHT - block_size * 6.5, 16, 32),
+            ]
+            for fire in fires:
+                fire.on()
+            
+            collectibles = [
+                Collectible(block_size * 0.5, HEIGHT - block_size * 2 - 40, 40, 40),
+                Collectible(block_size * 3, HEIGHT - block_size * 4 - 40, 40, 40),
+                Collectible(block_size * 5, HEIGHT - block_size * 3 - 40, 40, 40),
+                Collectible(block_size * 7, HEIGHT - block_size * 5 - 40, 40, 40),
+                Collectible(block_size * 9, HEIGHT - block_size * 4 - 40, 40, 40),
+                Collectible(block_size * 12, HEIGHT - block_size * 6 - 40, 40, 40),
+            ]
+        
+        solid_objects = [*floor, *platforms, *fires]
+        return player, solid_objects, collectibles
+    
+    player, objects, collectibles = setup_level(current_level)
     offset_x = 0
     scroll_area_width = 200
 
@@ -288,11 +577,51 @@ def main(window):
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_z and player.jump_count < 2:
                     player.jump()
+                if event.key == pygame.K_c:
+                    player.make_dash()
+
+        # Verificar si el jugador perdió todas las vidas
+        if player.lives <= 0:
+            result = show_game_over_menu(window)
+            if result == "restart":
+                player, objects, collectibles = setup_level(current_level)
+                offset_x = 0
+            elif result == "menu":
+                return
+            else:
+                run = False
 
         player.loop(FPS)
-        fire.loop()
+        
+        # Loop para todos los fuegos
+        for obj in objects:
+            if isinstance(obj, Fire):
+                obj.loop()
+        
+        # Detectar colisiones con coleccionables
+        for collectible in collectibles:
+            if not collectible.collected and pygame.sprite.collide_mask(player, collectible):
+                collectible.collected = True
+        
+        # Verificar si se completó el nivel
+        if all(c.collected for c in collectibles):
+            result = show_level_complete_menu(window)
+            if result == "continue":
+                current_level += 1
+                if current_level > 3:
+                    current_level = 1
+                player, objects, collectibles = setup_level(current_level)
+                offset_x = 0
+            else:
+                return
+        
+        # Detectar colisión con paredes para wall slide
+        wall_collide_left = collide(player, objects, -5)
+        wall_collide_right = collide(player, objects, 5)
+        player.update_wall_slide(wall_collide_left or wall_collide_right)
+        
         handle_move(player, objects)
-        draw(window, background, bg_image, player, objects, offset_x)
+        draw(window, background, bg_image, player, objects, offset_x, collectibles, current_level)
 
         if(
             (player.rect.right - offset_x >= WIDTH - scroll_area_width) and player.x_vel > 0) or (
@@ -304,5 +633,5 @@ def main(window):
     quit()
 
 if __name__ == "__main__":
-
-    main(window)
+    if show_menu(window):
+        main(window)
