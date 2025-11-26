@@ -136,7 +136,7 @@ def show_game_over_menu(window):
         menu_button.draw(window)
         pygame.display.update()
 
-def show_level_complete_menu(window):
+def show_level_complete_menu(window, level_num=1):
     continue_button = Button(WIDTH // 2 - 100, HEIGHT // 2 - 20, 200, 60, "SIGUIENTE")
     menu_button = Button(WIDTH // 2 - 100, HEIGHT // 2 + 60, 200, 60, "MENÚ")
 
@@ -163,6 +163,11 @@ def show_level_complete_menu(window):
         title = font_title.render("NIVEL COMPLETADO", True, (0, 255, 0))
         title_rect = title.get_rect(center=(WIDTH // 2, HEIGHT // 4))
         window.blit(title, title_rect)
+        
+        level_text = pygame.font.Font(None, 48)
+        level_display = level_text.render(f"Nivel {level_num}", True, (255, 255, 255))
+        level_rect = level_display.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 100))
+        window.blit(level_display, level_rect)
 
         continue_button.draw(window)
         menu_button.draw(window)
@@ -180,6 +185,7 @@ class Player(pygame.sprite.Sprite):
         self.rect = pygame.Rect(x, y, width, height)
         self.x_vel = 0
         self.y_vel = 0
+        self.image = None
         self.mask = None
         self.direction = "left"
         self.animation_count = 0
@@ -285,16 +291,16 @@ class Player(pygame.sprite.Sprite):
         sprite_sheet_name = sprite_sheet + "_" + self.direction
         sprites = self.SPRITES[sprite_sheet_name]
         sprite_index = (self.animation_count // self.ANIMATION_DELAY) % len(sprites)
-        self.sprite = sprites[sprite_index]
+        self.image = sprites[sprite_index]
         self.animation_count += 1
         self.update()
 
     def update(self):
-        self.rect = self.sprite.get_rect(topleft=(self.rect.x, self.rect.y))
-        self.mask = pygame.mask.from_surface(self.sprite)
+        self.rect = self.image.get_rect(topleft=(self.rect.x, self.rect.y))
+        self.mask = pygame.mask.from_surface(self.image)
 
     def draw(self, win, offset_x):
-        win.blit(self.sprite, (self.rect.x - offset_x, self.rect.y))
+        win.blit(self.image, (self.rect.x - offset_x, self.rect.y))
 
 class Object(pygame.sprite.Sprite):
     def __init__(self, x, y, width, height, name = None):
@@ -604,8 +610,9 @@ def main(window):
                 collectible.collected = True
         
         # Verificar si se completó el nivel
-        if all(c.collected for c in collectibles):
-            result = show_level_complete_menu(window)
+        all_collected = all(c.collected for c in collectibles) if collectibles else False
+        if all_collected:
+            result = show_level_complete_menu(window, current_level)
             if result == "continue":
                 current_level += 1
                 if current_level > 3:
